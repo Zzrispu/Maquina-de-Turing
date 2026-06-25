@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
 
 type Transition = [string, string, "L" | "R", State];
+type AuxiliaryAlphabet = [string, string, string];
 
-const tape = ref<string>("$abbabaB");
+const word = ref<string>("abbaba");
 const head = ref<number>(1);
 
 const currentState = ref<State>();
 const finalStates = ref<State[]>([]);
+const auxiliaryAlphabet = ref<AuxiliaryAlphabet>(["*", "X", "B"]);
+
+const tape = ref<string>(auxiliaryAlphabet.value[0] + word.value + auxiliaryAlphabet.value[2]);
+watch(word, (newWord) => {
+  tape.value = auxiliaryAlphabet.value[0] + newWord + auxiliaryAlphabet.value[2];
+  head.value = 1;
+});
 
 class State {
   private _label: string;
@@ -67,6 +75,8 @@ function iterate() {
 }
 
 onMounted(() => {
+  const [startSymbol, markSymbol, blankSymbol] = auxiliaryAlphabet.value;
+
   const q0 = new State();
   const q1 = new State("q1");
   const q2 = new State("q2");
@@ -75,29 +85,29 @@ onMounted(() => {
   const q5 = new State("q5");
   const q6 = new State("q6");
 
-  q0.addTransition(["a", "X", "R", q1]);
-  q0.addTransition(["b", "X", "R", q4]);
-  q0.addTransition(["X", "X", "R", q0]);
-  q0.addTransition(["B", "B", "R", q6]);
+  q0.addTransition(["a", markSymbol, "R", q1]);
+  q0.addTransition(["b", markSymbol, "R", q4]);
+  q0.addTransition([markSymbol, markSymbol, "R", q0]);
+  q0.addTransition([blankSymbol, blankSymbol, "R", q6]);
 
   q1.addTransition(["a", "a", "R", q1]);
-  q1.addTransition(["b", "X", "R", q2]);
+  q1.addTransition(["b", markSymbol, "R", q2]);
 
   q2.addTransition(["b", "b", "R", q2]);
   q2.addTransition(["a", "a", "R", q2]);
-  q2.addTransition(["B", "B", "L", q3]);
+  q2.addTransition([blankSymbol, blankSymbol, "L", q3]);
 
   q3.addTransition(["a", "a", "L", q3]);
   q3.addTransition(["b", "b", "L", q3]);
-  q3.addTransition(["X", "X", "L", q3]);
-  q3.addTransition(["$", "$", "R", q0]);
+  q3.addTransition([markSymbol, markSymbol, "L", q3]);
+  q3.addTransition([startSymbol, startSymbol, "R", q0]);
 
   q4.addTransition(["b", "b", "R", q4]);
-  q4.addTransition(["a", "X", "R", q5]);
+  q4.addTransition(["a", markSymbol, "R", q5]);
 
   q5.addTransition(["a", "a", "R", q5]);
   q5.addTransition(["b", "b", "R", q5]);
-  q5.addTransition(["B", "B", "L", q3]);
+  q5.addTransition([blankSymbol, blankSymbol, "L", q3]);
 
   currentState.value = q0;
   finalStates.value = [q6];
@@ -106,10 +116,13 @@ onMounted(() => {
 
 <template>
   <h1>Máquina de Turing</h1>
-  <input v-model="tape" />
+  <label for="i-word">Palavra:</label>
+  <input id="i-word" v-model="word" />
   <button @click="iterate">▶</button>
-  <p>Estado Atual: {{ currentState?.label }}</p>
+  <p>Alfabeto: { {{ [...new Set(word)].join(", ") }} }</p>
+  <p>Alfabeto Auxiliar: { {{ auxiliaryAlphabet.join(", ") }} }</p>
   <p>Estados Finais: {{ finalStates.map(s => s.label).join(", ") }}</p>
+  <p>Estado Atual: {{ currentState?.label }}</p>
   <div class="tape">
    <div v-for="(char, index) in tape" :key="index" :class="{ head: index === head }">
       {{ char }}
