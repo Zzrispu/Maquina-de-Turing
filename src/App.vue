@@ -13,6 +13,7 @@ const currentState = ref<State>();
 const finalStates = ref<State[]>([]);
 const auxiliaryAlphabet = ref<AuxiliaryAlphabet>(["*", "X", "B"]);
 
+const contextMenuRef = ref<HTMLUListElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const ctx = computed(() => canvasRef.value?.getContext("2d") as CanvasRenderingContext2D);
 const tapeRef = ref<HTMLDivElement | null>(null);
@@ -41,6 +42,8 @@ class State {
       const y = this._pos[1] + this._radius * Math.sin(rad);
       this._joints.push([x, y]);
     }
+
+    states.value.push(this);
   }
 
   get label(): string {
@@ -90,13 +93,6 @@ class State {
     ctx.value.stroke();
     ctx.value.font = "18px Arial";
     ctx.value.fillText(this._label, x, y);
-
-    let i: number = 0;
-    for (const joint of this._joints) {
-      ctx.value.font = "10px Arial";
-      ctx.value.fillText(`${i}`, joint[0], joint[1]);
-      i++;
-    }
   }
 
   drawTransitions(): void {
@@ -154,10 +150,8 @@ class State {
       }
 
       for (let i = startI; i < endI; i++) {
-        console.log("i")
         const joint = i < this._joints.length ? this._joints[i] as Coord : this._joints[i - this._joints.length] as Coord;
         for (let j = startJ; j < endJ; j++) {
-          console.log("j")
           const nextJoint = j < nextState._joints.length ? nextState._joints[j] as Coord : nextState._joints[j - nextState._joints.length] as Coord;
           const distance = Math.hypot(joint[0] - nextJoint[0], joint[1] - nextJoint[1]);
           if (distance < closestDistance) {
@@ -201,6 +195,19 @@ class State {
   }
 }
 
+function updateCtxMenuPos(pos: Coord): void {
+  if (!contextMenuRef.value || !canvasRef.value) return;
+
+  const {x: canvaX, y: canvaY} = canvasRef.value.getBoundingClientRect();
+  const maxTopValue = canvasRef.value.clientHeight - contextMenuRef.value.offsetHeight + canvaY;
+  const maxLeftValue = canvasRef.value.clientWidth - contextMenuRef.value.offsetWidth + canvaX;
+  console.log("Canvas position" + canvasRef.value.clientLeft);
+  const [x, y] = pos;
+
+  contextMenuRef.value.style.left = `${Math.min(maxLeftValue, x)}px`;
+  contextMenuRef.value.style.top = `${Math.min(maxTopValue, y)}px`;
+}
+
 function moveTape() {
   if (!tapeRef.value || !tapeRef.value.children.length) return;
     
@@ -219,15 +226,37 @@ function iterate() {
   }
 }
 
+function createNewState(e: PointerEvent): State {
+  if (!canvasRef.value) throw new Error("No defined Canvas");
+
+  const {x: canvaX, y: canvaY} = canvasRef.value.getBoundingClientRect();
+  const state = new State(undefined, [e.clientX - canvaX, e.clientY - canvaY]);
+  state.drawState();
+  return state;
+}
+
 onMounted(() => {
   // A função anonima abeixo executa uma vez e não gera reziduos
-  (() => {
+  {
     const { width: canvaWidth, height: canvaHeight } = (canvasRef.value?.parentElement as HTMLElement).getBoundingClientRect();
     canvasRef.value!.width = canvaWidth;
     canvasRef.value!.height = canvaHeight;
 
     moveTape();
-  })();
+  }
+
+  // Adiciona o custom context menu ao Canvas
+  {
+    canvasRef.value!.addEventListener("contextmenu", (e) => {
+      e.preventDefault(); // Previne que o default context menu apareça
+      updateCtxMenuPos([e.clientX, e.clientY]);
+      contextMenuRef.value!.style.visibility = "visible";
+    });
+
+    document.addEventListener("click", () => {
+      contextMenuRef.value!.style.removeProperty("visibility");
+    })
+  }
 
   const [startSymbol, markSymbol, blankSymbol] = auxiliaryAlphabet.value;
 
@@ -238,8 +267,6 @@ onMounted(() => {
   const q4 = new State("q4", [600, 400]);
   const q5 = new State("q5", [400, 400]);
   const q6 = new State("q6", [200, 500]);
-
-  states.value = [q0, q1, q2, q3, q4, q5, q6];
 
   q0.addTransition(["a", markSymbol, "R", q1]);
   q0.addTransition(["b", markSymbol, "R", q4]);
@@ -311,6 +338,9 @@ onMounted(() => {
       </ul>
     </section>
     <section id="canva-area" style="grid-area: canva-area; border: 1px solid black;">
+      <ul ref="contextMenuRef" id="context-menu">
+        <li @click="createNewState">Novo Estado</li>
+      </ul>
       <canvas id="canva" ref="canvasRef"></canvas>
     </section>
     <section id="machine-area" style="grid-area: machine-area; border: 1px solid yellow;">
@@ -348,6 +378,26 @@ main {
   min-width: 0;
   overflow: hidden;
   display: grid;
+
+  &>#context-menu {
+    border: 1px solid snow;
+    background-color: #ffffff;
+    width: fit-content;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    position: fixed;
+    border-radius: 5px;
+    overflow: hidden;
+    visibility: hidden;
+
+    &>li {
+      padding: .5rem 1rem;
+
+      &:hover{
+        cursor: pointer;
+        background-color: #f7f7f7;
+      }
+    }
+  }
 
   &>#canva {
     width: 100%;
