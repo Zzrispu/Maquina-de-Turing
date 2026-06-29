@@ -19,8 +19,20 @@ const transitions = ref<Transition[]>([]);
 const transitionByElement = new Map<Element, Transition>();
 
 const currentState = ref<State>();
+const inicialState = ref<State>();
 const finalStates = ref<State[]>([]);
 const auxiliaryAlphabet = ref<AuxiliaryAlphabet>(["*", "X", "B"]);
+
+watch(currentState, (newState, oldState) => {
+  newState?._element?.classList.add('current-state');
+  oldState?._element?.classList.remove('current-state');
+});
+
+watch(inicialState, (newState, oldState) => {
+  if (!newState || !newState._element) return;
+  newState._element.classList.add('inicial-state');
+  oldState?._element?.classList.remove('inicial-state');
+});
 
 const focusedState = ref<State>();
 const focusedTransition = ref<Transition>();
@@ -431,7 +443,11 @@ function createNewTransition(): Transition{
 function editTransition(): Transition {
   if (!focusedTransition.value || !canvaAreaRef.value) throw new Error("No focused transition or defined canvas");
 
-  const [read, write, direction] = prompt("Nova Transição", "a a R")?.split(" ") ?? ["a", "a", "R"];
+  const r = focusedTransition.value.read;
+  const w = focusedTransition.value.write;
+  const d = focusedTransition.value.direction;
+
+  const [read, write, direction] = prompt("Nova Transição", `${r} ${w} ${d}`)?.split(" ") ?? [r, w, d];
 
   focusedTransition.value.read = read ?? "a";
   focusedTransition.value.write = write ?? "a";
@@ -444,6 +460,28 @@ function deleteTransition(): void {
   if (!focusedTransition.value || !canvaAreaRef.value) throw new Error("No focused transition or defined canvas");
 
   focusedTransition.value.destroy();
+}
+
+function setInicialState(): State {
+  if (!focusedState.value) throw new Error("No focused State");
+
+  inicialState.value = focusedState.value;
+  currentState.value = inicialState.value;
+  return inicialState.value;
+}
+
+function toggleFinalState(): void {
+  if (!focusedState.value) throw new Error("No focused State");
+
+  if (finalStates.value.includes(focusedState.value)) {
+    const index = finalStates.value.indexOf(focusedState.value);
+    finalStates.value.splice(index, 1);
+    focusedState.value._element?.classList.remove("final-state");
+  }
+  else {
+    finalStates.value.push(focusedState.value);
+    focusedState.value._element?.classList.add("final-state");
+  }
 }
 
 onMounted(() => {
@@ -503,6 +541,7 @@ onMounted(() => {
   q5.addTransition(blankSymbol, blankSymbol, "L", q3);
 
   currentState.value = q0;
+  inicialState.value = q0;
   finalStates.value = [q6];
 
   q0.renderElement();
@@ -512,12 +551,13 @@ onMounted(() => {
   q4.renderElement();
   q5.renderElement();
   q6.renderElement();
+  q6._element?.classList.add("final-state");
 
   // Quando o input da palavra muda, essa função é chamada
   watch(word, (newWord) => {
     tape.value = auxiliaryAlphabet.value[0] + newWord + auxiliaryAlphabet.value[2];
     head.value = 1;
-    currentState.value = q0;
+    currentState.value = inicialState.value;
   });
 })
 </script>
@@ -531,6 +571,7 @@ onMounted(() => {
       <button @click="iterate">▶</button>
       <p>Alfabeto: { {{ [...new Set(word)].join(", ") }} }</p>
       <p>Alfabeto Auxiliar: { {{ auxiliaryAlphabet.join(", ") }} }</p>
+      <p>Estado Inicial: {{ inicialState?.label }}</p>
       <p>Estados Finais: {{ finalStates.map(s => s.label).join(", ") }}</p>
       <p>Estado Atual: {{ currentState?.label }}</p>
       <ul id="states-list">
@@ -573,10 +614,15 @@ onMounted(() => {
         </g>
       </svg>
       <ul ref="contextMenuRef" id="context-menu">
-        <li @click="createNewState">Novo Estado</li>
+        <li v-if="focusedState" @click="setInicialState">Definir como incial</li>
+        <li v-if="focusedState" @click="toggleFinalState">
+          <input type="checkbox" id="final-state-cb" :checked="finalStates.includes(focusedState)">
+          <label for="final-state-cb">Estado final</label>
+        </li>
         <li v-if="focusedState" @click="createNewTransition">Nova Transição</li>
-        <li v-if="focusedState" @click="focusedState.destroy()">Deletar Estado</li>
         <li v-if="focusedTransition" @click="editTransition">Editar Transição</li>
+        <li @click="createNewState">Novo Estado</li>
+        <li v-if="focusedState" @click="focusedState.destroy()">Deletar Estado</li>
         <li v-if="focusedTransition" @click="deleteTransition">Excluir Transição</li>
       </ul>
     </section>

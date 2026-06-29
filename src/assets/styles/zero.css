@@ -24,3 +24,30 @@ ul, ol {
 p, h1, h2, h3, h4, h5, h6 {
     overflow-wrap: break-word;
 }
+
+.current-state {
+    background-color: #aaffaa;
+}
+
+.inicial-state::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateX(-100%) translateY(-50%);
+    width: 50%;
+    height: 75%;
+    background-color: black;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.final-state::before {
+    content: "";
+    position: absolute;
+    top: 10%;
+    left: 10%;
+    width: 80%;
+    height: 80%;
+    border: 1px solid black;
+    border-radius: 50%;
+}
