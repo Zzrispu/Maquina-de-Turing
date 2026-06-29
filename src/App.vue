@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed, reactive } from "vue";
+import { ref, onMounted, watch, reactive } from "vue";
 
 type AuxiliaryAlphabet = [startSymbol: string, markSymbol: string, blankSymbol: string];
 type Coord = [X: number, Y: number];
@@ -16,11 +16,14 @@ const head = ref<number>(1);
 const states = ref<State[]>([]);
 const stateByElement = new Map<HTMLDivElement, State>();
 const transitions = ref<Transition[]>([]);
+const transitionByElement = new Map<Element, Transition>();
 
 const currentState = ref<State>();
-const focusedState = ref<State>();
 const finalStates = ref<State[]>([]);
 const auxiliaryAlphabet = ref<AuxiliaryAlphabet>(["*", "X", "B"]);
+
+const focusedState = ref<State>();
+const focusedTransition = ref<Transition>();
 
 const canvaAreaRef = ref<HTMLElement | null>(null);
 const contextMenuRef = ref<HTMLUListElement | null>(null);
@@ -37,6 +40,8 @@ class Transition {
   public stackCount: number = 0;
 
   private _fromState: State;
+
+  public elementId: string = "";
 
   constructor(read: string, write: string, direction: "L" | "R", fromState: State, toState: State) {
     this.read = read;
@@ -129,7 +134,7 @@ class Transition {
   }
 
   get labelOffSet(): Coord {
-    return [this.geometry.labelPos[0], this.geometry.labelPos[1] + this.stackCount * 12];
+    return [this.geometry.labelPos[0], this.geometry.labelPos[1] - this.stackCount * 15];
   }
 
   get label(): string {
@@ -229,6 +234,8 @@ class State {
     toState._inTransitions.push(transition);
     this._outTransitions.push(transition);
 
+    transition.elementId = this.label + toState.label + transition.stackCount;
+
     return transition;
   }
 
@@ -323,6 +330,7 @@ class State {
 
     if (this._element) {
       this._element.removeEventListener('mousedown', this.mouseDown);
+      if (stateByElement.has(this._element)) stateByElement.delete(this._element);
       this._element.remove();
       this._element = null;
     }
@@ -379,11 +387,9 @@ function createNewState(e: PointerEvent): State {
   return state;
 }
 
-function createNewTransition(e: PointerEvent): Transition{
+function createNewTransition(): Transition{
   if (!focusedState.value || !canvaAreaRef.value) throw new Error("No focused State");
   const {x: canvaX, y: canvaY} = canvaAreaRef.value.getBoundingClientRect();
-
-  const statesElements = canvaAreaRef.value.querySelectorAll("div");
 
   const mouseMove = (e: MouseEvent) => {
     tempState.pos = [e.clientX - canvaX, e.clientY - canvaY];
@@ -422,18 +428,41 @@ function createNewTransition(e: PointerEvent): Transition{
   return transition;
 }
 
+function editTransition(): Transition {
+  if (!focusedTransition.value || !canvaAreaRef.value) throw new Error("No focused transition or defined canvas");
+
+  const [read, write, direction] = prompt("Nova Transição", "a a R")?.split(" ") ?? ["a", "a", "R"];
+
+  focusedTransition.value.read = read ?? "a";
+  focusedTransition.value.write = write ?? "a";
+  focusedTransition.value.direction = direction as "L" | "R" ?? "R";
+
+  return focusedTransition.value;
+}
+
+function deleteTransition(): void {
+  if (!focusedTransition.value || !canvaAreaRef.value) throw new Error("No focused transition or defined canvas");
+
+  focusedTransition.value.destroy();
+}
+
 onMounted(() => {
   // Lógica do Custom Context Menu
   {
+    // click com o botão esquerdo dentro do canvas
     canvaAreaRef.value!.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       updateCtxMenuPos([e.clientX, e.clientY]);
+      if (!focusedState.value?._element?.contains(e.target as Node)) focusedState.value = undefined;
+      if (!transitionByElement.has((e.target as Element).closest('g') as Element)) focusedTransition.value = undefined;
       contextMenuRef.value!.style.visibility = "visible";
     });
 
+    // Qualquer click fora do Canvas
     document.addEventListener("click", () => {
       contextMenuRef.value!.style.visibility = "hidden";
       focusedState.value = undefined;
+      focusedTransition.value = undefined;
     })
   }
 
@@ -522,9 +551,23 @@ onMounted(() => {
             <path d="M0, 0 L0, 6 L9, 3 z" fill="black" />
           </marker>
         </defs>
-        <g v-for="transition in transitions" :key="transition.label + transition.fromState.label + transition.toState.label">
+        <g v-for="(transition, index) in transitions" :key="transition.elementId" :id="transition.elementId"
+          @contextmenu="(e) => {
+            focusedTransition = transitions[index] as Transition;
+          }"
+          :ref="el => {
+            if (el) transitionByElement.set(el as Element, transition as Transition)
+            else { // Quando o elemento é desmontado (transição removida)
+              for (const [key, value] of transitionByElement.entries()) {
+                if (value === transition) {
+                  transitionByElement.delete(key);
+                  break;
+                }
+              }
+            }
+          }">
           <path :d="transition.pathD" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrowhead)" />
-          <text :x="transition.labelOffSet[0]" :y="transition.labelOffSet[1]">
+          <text :x="transition.labelOffSet[0] -10" :y="transition.labelOffSet[1] + 22">
             {{ transition.label }}
           </text>
         </g>
@@ -533,6 +576,8 @@ onMounted(() => {
         <li @click="createNewState">Novo Estado</li>
         <li v-if="focusedState" @click="createNewTransition">Nova Transição</li>
         <li v-if="focusedState" @click="focusedState.destroy()">Deletar Estado</li>
+        <li v-if="focusedTransition" @click="editTransition">Editar Transição</li>
+        <li v-if="focusedTransition" @click="deleteTransition">Excluir Transição</li>
       </ul>
     </section>
     <section id="machine-area" style="grid-area: machine-area; border: 1px solid yellow;">
