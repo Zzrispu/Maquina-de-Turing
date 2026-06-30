@@ -361,6 +361,9 @@ class State {
     const index = states.value.indexOf(this);
     if (index > -1) states.value.splice(index, 1);
 
+    const finalIndex = finalStates.value.indexOf(this);
+    if (finalIndex > -1) finalStates.value.splice(finalIndex, 1);
+
     if (currentState.value === this) currentState.value = undefined;
     if (focusedState.value === this) focusedState.value = undefined;
   }
