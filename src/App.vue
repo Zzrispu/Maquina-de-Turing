@@ -52,6 +52,7 @@ class Transition {
   public stackCount: number = 0;
 
   private _fromState: State;
+  private _m: -1 | 1 = 1;
 
   public elementId: string = "";
 
@@ -75,14 +76,15 @@ class Transition {
 
     let startI: number, endI: number, startJ: number, endJ: number;
 
+    if (this._fromState === this.toState) {startI = 7; endI = 8; startJ = 5; endJ = 6}
     // Proximo estado está no primeiro quadrante em relação ao estado atual como origem
-    if ((x < nextX) && (y >= nextY)) {startI = 6; endI = 9; startJ = 2; endJ = 5;    }
+    else if ((x < nextX) && (y >= nextY)) {startI = 6; endI = 9; startJ = 2; endJ = 5; this._m = 1}
     // Segundo quadrante
-    else if ((x > nextX) && (y >= nextY)) {startI = 4; endI = 7; startJ = 0; endJ = 3;}
+    else if ((x > nextX) && (y >= nextY)) {startI = 4; endI = 7; startJ = 0; endJ = 3; this._m = -1}
     // Terceiro quadrante
-    else if ((x > nextX) && (y < nextY)) {startI = 2; endI = 5; startJ = 6;endJ = 9;}
+    else if ((x > nextX) && (y < nextY)) {startI = 2; endI = 5; startJ = 6;endJ = 9; this._m = -1}
     // Quarto quadrante
-    else {startI = 0; endI = 3; startJ = 4; endJ = 7;}
+    else {startI = 0; endI = 3; startJ = 4; endJ = 7; this._m = 1}
 
     for (let i = startI; i < endI; i++) {
       const joint = i < this._fromState.joints.length
@@ -118,12 +120,12 @@ class Transition {
     const [[startX, startY], [endX, endY]] = this.findClosestJoints();
 
     const cpX = (startX + endX) / 2;
-    const cpY = (startY + endY) / 2 - 80;
+    const cpY = (startY + endY) / 2 - (80 * this._m);
 
     this.geometry.startJoint = [startX, startY];
     this.geometry.endJoint = [endX, endY];
     this.geometry.controlPoint = [cpX, cpY];
-    this.geometry.labelPos = [cpX + 12, cpY + 12];
+    this.geometry.labelPos = [cpX -5, cpY + (this._m > 0 ? 12 : -40)];
   }
 
   retarget(newToState: State): void {
@@ -238,6 +240,10 @@ class State {
 
   get joints(): Coord[] {
     return this._joints;
+  }
+
+  get outTransitions(): Transition[] {
+    return this._outTransitions;
   }
 
   addTransition(read: string, write: string, direction: "L" | "R", toState: State): Transition {
@@ -414,18 +420,20 @@ function createNewTransition(): Transition{
     const target = e.target as HTMLElement;
     const element = target.closest('div') as HTMLDivElement | null;
     const clickedState = element ? stateByElement.get(element) : undefined;
-    console.log(clickedState);
 
     if (clickedState && clickedState !== tempState) {
-      transition.retarget(clickedState);
+      const index = states.value.indexOf(clickedState);
+      const newToState = states.value[index] as State
+      transition.retarget(newToState);
+      transition.stackCount = transition.fromState.outTransitions.filter(ot => ot.toState === newToState).length;
+
+      const [read, write, direction] = prompt("Função de transição", "a a R")!.split(" ");
+      transition.read = read ?? "a";
+      transition.write = write ?? "a";
+      transition.direction = direction as "L" | "R" ?? "R";
     } else {
       transition.destroy();
     }
-
-    const [read, write, direction] = prompt("Função de transição", "a a R")!.split(" ");
-    transition.read = read ?? "a";
-    transition.write = write ?? "a";
-    transition.direction = direction as "L" | "R" ?? "R";
 
     tempState.destroy();
   }
